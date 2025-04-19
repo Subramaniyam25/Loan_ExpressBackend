@@ -12,10 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 // ✅ MongoDB connection
 const connectDB = async () => {
   try {
-    await mongoose.connect("mongodb://127.0.0.1:27017/profileDB", {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect("mongodb+srv://dineshselvaraj50478:Dhinesh8833@cluster0.f9s6a.mongodb.net/profileDB?retryWrites=true&w=majority&appName=Cluster0");
     console.log("✅ MongoDB connected successfully");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
@@ -46,6 +43,7 @@ const ProfileSchema = new mongoose.Schema({
   Loan_Term: { type: Number, default: 0 },
   Existing_EMI: { type: Number, default: 0 },
   Email: { type: String, required: true },
+  Password: { type: String, required: true },
 
   // documents: {
   //   aadhar: { type: Buffer },
@@ -118,6 +116,7 @@ app.post("/profile_completion", async (req, res) => {
       Contact_No,
       Address,
       Email,
+      Password,
     } = req.body.eli_values;
 
     // 1️⃣ Get the last created profile
@@ -153,6 +152,7 @@ app.post("/profile_completion", async (req, res) => {
       Loan_Term: 0,
       Existing_EMI: 0,
       Email,
+      Password,
     });
 
     await newProfile.save();
@@ -229,41 +229,48 @@ app.get("/get_user/:user_id", async (req, res) => {
   }
 });
 
-app.get("/get_user/:user_id/:dob", async (req, res) => {
-  const { user_id, dob } = req.params;
-
+app.get('/get_user/:userId', async (req, res) => {
   try {
-    const profile = await Profile.findOne({ user_id, DOB: dob });
+    const { userId } = req.params;
+    const user = await User.findOne({ user_id: userId });
 
-    if (!profile) {
-      return res.status(404).json({ message: "Profile not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
     }
 
-    res.status(200).json(profile);
-  } catch (error) {
-    console.error("Error fetching profile:", error);
+    res.status(200).json(user);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+
 app.put("/update_profile", async (req, res) => {
-  const { user_id, ...updates } = req.body;
+  const updatedProfile = req.body;
+
+  if (!updatedProfile.user_id) {
+    return res.status(400).json({ message: "User ID is required for update." });
+  }
 
   try {
-    const updated = await Profile.findOneAndUpdate(
-      { user_id },
-      { $set: updates },
+    const profile = await Profile.findOneAndUpdate(
+      { user_id: updatedProfile.user_id },
+      { $set: updatedProfile },
       { new: true }
     );
 
-    if (!updated) return res.status(404).json({ message: "Profile not found" });
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found." });
+    }
 
-    res.json(updated);
-  } catch (err) {
-    console.error("Update error:", err.message);
+    res.status(200).json({ message: "Profile updated successfully", profile });
+  } catch (error) {
+    console.error("Error updating profile:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 const multer = require("multer");
 const storage = multer.memoryStorage();  // Store files as Buffer
@@ -399,6 +406,41 @@ app.post("/contact-msg", (req, res) => {
       res.status(500).json({ message: 'Error sending email' });
     });
 });
+
+app.post("/signin", async (req, res) => {
+  const { userid, password } = req.body;
+
+  // Validation
+  if (!userid || !password) {
+    return res.status(400).json({ message: "User ID and Password are required." });
+  }
+
+  try {
+    // Match with MongoDB fields
+    const user = await Profile.findOne({ user_id: userid, Password: password });
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials. Please try again." });
+    }
+
+    const userData = {
+      user_id: user.user_id,
+      Name: user.Name,
+      Email: user.Email,
+      DOB: user.DOB,
+    };
+
+    res.status(200).json({
+      status: "success",
+      message: "Login successful",
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Error during signin:", error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+});
+
 
 
 
